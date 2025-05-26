@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 authors = ["cyj0122 <269873721@qq.com>"]
 description = "wheelTimer is Netty's HashedWheelTimer implementation based on Rust"
+readme = "README.md"
+keywords = ["timer", "netty", "delay", "wheeltimer"]
+repository = "https://github.com/cyj0122/wheeltimer"
+license = "Apache-2.0"
 
 [dependencies]
 tokio = {version = "1.43.0", features = ["full"]}
