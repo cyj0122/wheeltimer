@@ -505,11 +505,12 @@ impl Timeout {
     }
 
     pub async fn cancel(&self) -> bool {
-        match self.state.compare_exchange(ST_INIT, ST_EXPIRED, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst) {
+        match self.state.compare_exchange(ST_INIT, ST_CANCELLED, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst) {
             Ok(_) => {
                 let timer = self.timer();
-                let mut cancelled = timer.inner.cancelled_queue.lock().await;
-                cancelled.push_back(self.clone());
+                if let Ok(mut cancelled) = timer.inner.cancelled_queue.try_lock() {
+                    cancelled.push_back(self.clone());
+                }
                 true
             }
             Err(_) => {

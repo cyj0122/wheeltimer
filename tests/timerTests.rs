@@ -3,15 +3,15 @@ use std::time::{Duration, SystemTime};
 use wheeltimer::CountDownLatch;
 use rand::Rng;
 
-#[tokio::test]
-// #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+// #[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn simple_test() {
     let mut rng = rand::thread_rng();
-    let total = 10000;
+    let total = 100000;
 
     let latch = Arc::new(CountDownLatch::new(total));
 
-    let timer = wheeltimer::WheelTimer::new(Duration::from_millis(20), 1024, 100000);
+    let timer = wheeltimer::WheelTimer::new(Duration::from_millis(100), 1024, 100000);
     assert!(timer.is_ok());
     let timer = timer.unwrap();
     timer.start().await;
@@ -30,8 +30,7 @@ async fn simple_test() {
             }
         }).await.unwrap();
 
-        if i % 3 == 0 {
-            timeout.cancel().await;
+        if i % 3 == 0 && timeout.cancel().await {
             println!("timeout cancel:{}, expect: {}s, delay:{}ms", timeout.is_cancelled(), delay, system_time_ms() - ms);
             latch.count_down();
         }
