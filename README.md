@@ -19,7 +19,7 @@ Add this to your Cargo.toml
 
 ```toml
 [dependencies]
-wheeltimer = "0.1"
+wheeltimer = "0.1.1"
 ```
 
 
