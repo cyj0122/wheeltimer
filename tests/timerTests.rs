@@ -22,12 +22,9 @@ async fn simple_test() {
         let ms = system_time_ms();
         println!("add delay timeout:{}s", delay);
 
-        let timeout = timer.new_timeout(Duration::from_secs(delay), move |timeout| {
-            let latch_clone = latch_clone.clone();
-            async move {
-                println!("timeout expirse:{}, expect: {}s, delay:{}ms", timeout.is_expired(), delay, system_time_ms() - ms);
-                latch_clone.count_down();
-            }
+        let timeout = timer.new_timeout(Duration::from_secs(delay), async move {
+            println!("timeout, expect: {}s, delay:{}ms", delay, system_time_ms() - ms);
+            latch_clone.count_down();
         }).await.unwrap();
 
         if i % 3 == 0 && timeout.cancel().await {

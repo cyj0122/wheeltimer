@@ -62,12 +62,12 @@ impl Display for Error {
 /// async fn main() {
 ///     let timer = WheelTimer::new(tokio::time::Duration::from_millis(100), 1024, 100000).unwrap();
 ///     timer.start().await;
-///     let timeout = timer.new_timeout(tokio::time::Duration::from_secs(2), |timeout| {
+///     let timeout = timer.new_timeout(tokio::time::Duration::from_secs(2),
 ///         async move {
 ///             // async task logic here
 ///             println!("a delay task is executed");
 ///         }
-///     }).await;
+///     ).await;
 ///
 ///     tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 ///     timer.stop().await;
@@ -137,10 +137,9 @@ impl WheelTimer {
         let _ = self.inner.worker_state.compare_exchange(WORKER_STATE_STARTED, WORKER_STATE_SHUTDOWN, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst);
     }
 
-    pub async fn new_timeout<F, Fut>(&self, delay: Duration, task: F) -> Result<Timeout, Error>
+    pub async fn new_timeout<F>(&self, delay: Duration, task: F) -> Result<Timeout, Error>
     where
-        F: Fn(Timeout) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output=()> + Send + 'static,
+        F: Future<Output=()> + Send + 'static,
     {
         let current_pending_timeouts = self.inner.pending_timeouts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
@@ -156,7 +155,7 @@ impl WheelTimer {
             system_time_nanos() + delay.as_nanos() as u64 - start_time
         };
 
-        let timeout = Timeout::new(self.clone(), deadline, Box::new(move |timeout| Box::pin(task(timeout))));
+        let timeout = Timeout::new(self.clone(), deadline, Box::pin(task));
         self.inner.timeout_queue.lock().await.push_back(timeout.clone());
 
         Ok(timeout)
@@ -428,14 +427,14 @@ const ST_EXPIRED: u8 = 2;
 #[derive(Clone)]
 pub struct Timeout {
     inner: Arc<RwLock<WheelTimeoutInner>>,
+    task: Arc<Mutex<Option<BoxedAsyncFn>>>,
     state: Arc<AtomicU8>,
     timer: WheelTimer,
 }
 
-type BoxedAsyncFn = Box<dyn Fn(Timeout) -> Pin<Box<dyn Future<Output=()> + Send>> + Send + Sync>;
+type BoxedAsyncFn = Pin<Box<dyn Future<Output=()> + Send>>;
 
 struct WheelTimeoutInner {
-    task: BoxedAsyncFn,
     deadline: u64,
     remaining_rounds: u64,
     next: Option<Timeout>,
@@ -453,13 +452,13 @@ impl Timeout {
     fn new(timer: WheelTimer, deadline: u64, task: BoxedAsyncFn) -> Self {
         Timeout {
             inner: Arc::new(RwLock::new(WheelTimeoutInner {
-                task,
                 deadline,
                 remaining_rounds: 0,
                 next: None,
                 prev: None,
                 bucket: None,
             })),
+            task: Arc::new(Mutex::new(Some(task))),
             state: Arc::new(AtomicU8::new(ST_INIT)),
             timer,
         }
@@ -468,12 +467,13 @@ impl Timeout {
     async fn expire(&self) {
         match self.state.compare_exchange(ST_INIT, ST_EXPIRED, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst) {
             Ok(_) => {
-                let self_clone = self.clone();
-                tokio::spawn(async move {
-                    let inner = self_clone.inner.read().await;
-                    let f = &inner.task;
-                    f(self_clone.clone()).await
-                });
+                let task = {
+                    let mut inner = self.task.lock().await;
+                    inner.take()
+                };
+                if let Some(task) = task {
+                    tokio::spawn(task);
+                }
             }
             Err(_) => {}
         }

@@ -1,6 +1,6 @@
 [package]
 name = "wheeltimer"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 authors = ["cyj0122 <269873721@qq.com>"]
 description = "wheelTimer is Netty's HashedWheelTimer implementation based on Rust"

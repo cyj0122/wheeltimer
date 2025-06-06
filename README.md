@@ -19,7 +19,7 @@ Add this to your Cargo.toml
 
 ```toml
 [dependencies]
-wheeltimer = "0.1.1"
+wheeltimer = "0.2.0"
 ```
 
 
@@ -38,11 +38,11 @@ async fn main() {
     timer.start().await;
 
     // Schedule a timeout after 2 seconds
-    let timeout = timer.new_timeout(Duration::from_secs(2), |timeout| {
+    let timeout = timer.new_timeout(Duration::from_secs(2), 
         async move {
             println!("A delayed task is executed!");
         }
-    }).await.unwrap();
+    ).await.unwrap();
 
     // Wait for the task to execute
     tokio::time::sleep(Duration::from_secs(3)).await;
